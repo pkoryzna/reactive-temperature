@@ -1,20 +1,25 @@
 import akka.actor._
 import akka.stream.ActorMaterializer
-import akka.stream.scaladsl.{Sink, Source}
+import akka.stream.actor.ActorPublisher
+import akka.stream.scaladsl.{Merge, Sink, Source}
+import temperature.FileRefresher
+import scala.concurrent.duration._
 
 object Boot extends App {
-  implicit val system = ActorSystem("reactive-tweets")
+  implicit val system = ActorSystem("reactive-temperature")
   implicit val materializer = ActorMaterializer()
 
-  val fakeData = List(
-    "11 22 33 44 55 66 77 88 : crc=d8 YES",
-    "11 22 33 44 55 66 77 88 t=26125"
-  )
+  def fileReloadSource(period: FiniteDuration, path: String): Source[String, Unit] = {
+    Source(ActorPublisher[String](system.actorOf(FileRefresher.props(period, path))))
+  }
+  
+  val (period, path) = (10.seconds, "/exampleData/sensorData.txt")
 
-  val theSource = Source(fakeData)
+
+  val goodSensor = fileReloadSource(period, path)
 
   val validTemperature =
-    theSource
+    goodSensor
       .grouped(2)
       .collect {
         case Seq(crcLine, tempLine) if crcLine.contains("YES") => tempLine
