@@ -1,4 +1,4 @@
-name := "temperature_sensor"
+name := "reactive-temperature"
 
 version := "1.0"
 
