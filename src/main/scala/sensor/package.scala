@@ -30,4 +30,12 @@ package object sensor {
 
     }
   }
+  
+  object W1ThermSource {
+    def apply[Mat](stringSource: Source[String, Mat], sensor: Sensor): Source[(SerialNumber, Double), Mat] = {
+      stringSource.filter(_.contains("t="))
+        .map(_.split("\\s").last.replace("t=", "").toDouble / 1000)
+        .map((sensor.serialNumber, _))
+    }
+  }
 }
