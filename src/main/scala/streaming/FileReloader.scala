@@ -1,33 +1,37 @@
-package temperature
-
+package streaming
 
 import java.io.InputStream
 
-import akka.actor.{Props, ActorLogging}
+import akka.actor.{ActorLogging, Props}
 import akka.stream.actor.ActorPublisher
 
 import scala.annotation.tailrec
 import scala.concurrent.duration._
 import scala.util.Random
 
-class FileRefresher(val refreshEvery: FiniteDuration, val path: String)
+/**
+ * Actor continually refreshing a text file at given path,
+ * stashing lines not yet delivered in a buffer. 
+ * Warning: not suitable for huge files!
+ * @param reloadEvery period between consecutive reloads
+ * @param path path to open
+ */
+class FileReloader(val reloadEvery: FiniteDuration, val path: String)
   extends ActorPublisher[String]
   with ActorLogging {
 
+  import FileReloader._
   import akka.stream.actor.ActorPublisherMessage._
-  import FileRefresher._
 
   private var linesBuffer: Vector[String] = Vector.empty
 
   import context.dispatcher
 
   val refreshMsgSchedule = context.system.scheduler.schedule(
-    Random.nextInt(50).millis, // not everyone at once eh?
-    refreshEvery,
+    Random.nextInt(50).millis, // in case of multiple instances they shouldn't start at the same moment
+    reloadEvery,
     self,
     ReloadFile)
-
-
 
 
   override def receive: Receive = {
@@ -51,7 +55,7 @@ class FileRefresher(val refreshEvery: FiniteDuration, val path: String)
           log.info(s"Reloading lines from $path")
           readInput(inputStream)
         case None =>
-          log.info(s"couldn't open path $path")
+          log.warning(s"couldn't open path $path")
       }
   }
 
@@ -80,12 +84,12 @@ class FileRefresher(val refreshEvery: FiniteDuration, val path: String)
 
 }
 
-object FileRefresher {
+object FileReloader {
 
   case class LineRead(line: String)
 
   case object ReloadFile
 
-  def props(refreshEvery: FiniteDuration, path: String) = Props(classOf[FileRefresher], refreshEvery, path)
+  def props(refreshEvery: FiniteDuration, path: String) = Props(classOf[FileReloader], refreshEvery, path)
 
 }
