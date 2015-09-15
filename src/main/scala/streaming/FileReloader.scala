@@ -1,9 +1,10 @@
 package streaming
 
-import java.io.InputStream
+import java.io.{IOException, FileNotFoundException, File}
 
-import akka.actor.{ActorLogging, Props}
+import akka.actor.{ActorSystem, ActorLogging, Props}
 import akka.stream.actor.ActorPublisher
+import akka.stream.scaladsl.Source
 
 import scala.annotation.tailrec
 import scala.concurrent.duration._
@@ -23,9 +24,7 @@ class FileReloader(val reloadEvery: FiniteDuration, val path: String)
   import FileReloader._
   import akka.stream.actor.ActorPublisherMessage._
 
-  private var linesBuffer: Vector[String] = Vector.empty
-
-  import context.dispatcher
+  implicit val executionCtx = context.dispatcher
 
   val refreshMsgSchedule = context.system.scheduler.schedule(
     Random.nextInt(50).millis, // in case of multiple instances they shouldn't start at the same moment
@@ -33,6 +32,8 @@ class FileReloader(val reloadEvery: FiniteDuration, val path: String)
     self,
     ReloadFile)
 
+  import context.dispatcher
+  private var linesBuffer: Vector[String] = Vector.empty
 
   override def receive: Receive = {
     case LineRead(line) if linesBuffer.isEmpty && totalDemand > 0 =>
@@ -42,31 +43,33 @@ class FileReloader(val reloadEvery: FiniteDuration, val path: String)
       linesBuffer :+= line
 
     case Request(_) =>
-      deliverBuf
+      deliverBuf()
 
     case Cancel =>
       refreshMsgSchedule.cancel()
       context.stop(self)
 
     case ReloadFile =>
-      val stream = Option(this.getClass.getResourceAsStream(path))
-      stream match {
-        case Some(inputStream) =>
-          log.info(s"Reloading lines from $path")
-          readInput(inputStream)
-        case None =>
+      try {
+        log.debug(s"Reloading lines from $path")
+        readInput(new File(path))
+      }
+      catch {
+        case fe: FileNotFoundException =>
           log.warning(s"couldn't open path $path")
+        case ioe: IOException =>
+          log.error(s"IOException wile reading file $path")
       }
   }
 
-  def readInput(inputStream: InputStream): Unit = {
-    val source = io.Source.fromInputStream(inputStream)
+  def readInput(f: File): Unit = {
+    val source = io.Source.fromFile(f)
     val lines = source.getLines()
     lines.foreach(self ! LineRead(_))
     source.close()
   }
 
-  @tailrec final def deliverBuf: Unit = {
+  @tailrec final def deliverBuf(): Unit = {
     if (totalDemand > 0) {
       if (totalDemand < Int.MaxValue) {
         val (use, keep) = linesBuffer.splitAt(totalDemand.toInt)
@@ -77,7 +80,7 @@ class FileReloader(val reloadEvery: FiniteDuration, val path: String)
         linesBuffer = keep
         use foreach onNext
 
-        deliverBuf
+        deliverBuf()
       }
     }
   }
@@ -86,10 +89,13 @@ class FileReloader(val reloadEvery: FiniteDuration, val path: String)
 
 object FileReloader {
 
+  def props(refreshEvery: FiniteDuration, path: String) = Props(classOf[FileReloader], refreshEvery, path)
+
   case class LineRead(line: String)
 
   case object ReloadFile
 
-  def props(refreshEvery: FiniteDuration, path: String) = Props(classOf[FileReloader], refreshEvery, path)
-
+  def source(period: FiniteDuration, path: String)(implicit system: ActorSystem) = {
+    Source(ActorPublisher[String](system.actorOf(FileReloader.props(period, path))))
+  }
 }
