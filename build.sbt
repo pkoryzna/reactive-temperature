@@ -4,5 +4,9 @@ version := "1.0"
 
 scalaVersion := "2.11.5"
 
-libraryDependencies +=  "com.typesafe.akka" % "akka-stream-experimental_2.11" % "1.0"
+libraryDependencies ++=  Seq(
+  "com.typesafe.akka" %% "akka-actor" % "2.3.14",
+  "com.typesafe.akka" %% "akka-stream-experimental" % "1.0",
+)
+
 
