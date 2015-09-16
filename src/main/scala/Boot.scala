@@ -4,7 +4,7 @@ import akka.actor._
 import akka.stream.ActorMaterializer
 import akka.stream.actor.ActorPublisher
 import akka.stream.scaladsl._
-import sensor.{W1ThermSource, SerialNumber}
+import sensor.{Measurement, W1ThermSource, SerialNumber}
 import streaming.FileReloader
 
 import scala.concurrent.duration._
@@ -28,10 +28,13 @@ object Boot extends App {
 
     val merge = b.add(Merge[(SerialNumber, Double)](sensorSources.size))
 
-    val consoleSink = b.add(Sink.foreach[(SerialNumber, Double)](st => log.info(s"sensor: ${st._1}, temp: ${st._2} C")))
+    val consoleSink = b.add(Sink.foreach(println))
+
+    val toMeasurement = b.add{ Flow[(SerialNumber, Double)]
+      .map(pair => Measurement(pair._1, pair._2, System.currentTimeMillis())) }
 
     sensorSources.foreach { _ ~> merge }
-                                 merge ~> consoleSink
+                                 merge ~> toMeasurement ~> consoleSink
   }
 
   log.info("Starting up flow")
