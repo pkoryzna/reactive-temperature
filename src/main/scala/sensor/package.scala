@@ -4,10 +4,15 @@ import java.nio.file.{Files, Path}
 import akka.stream.scaladsl.Source
 
 package object sensor {
+  type Timestamp = Long
 
   case class SerialNumber(serial: String) extends AnyVal
 
   case class Sensor(serialNumber: SerialNumber, device: File)
+
+  case class Measurement(serialNumber: SerialNumber, value: Double, timestamp: Timestamp)
+
+  implicit val TimestampOrd = Ordering.by[Measurement, Timestamp](_.timestamp)
 
   object Sensor {
 
