@@ -1,42 +1,41 @@
 package streaming
 
-import akka.actor.Actor.Receive
+import akka.actor.Props
 import akka.stream.actor.{ActorSubscriberMessage, WatermarkRequestStrategy, RequestStrategy, ActorSubscriber}
-import akka.stream.stage.{SyncDirective, Context, PushPullStage}
+import sensor.{Measurement, Timestamp}
 
 import scala.collection.immutable.SortedSet
 import scala.concurrent.duration.FiniteDuration
 
-import TimedBuffer._
+class TimedBuffer(keepLast: FiniteDuration) extends ActorSubscriber {
 
-class TimedBuffer[T](keepLast: FiniteDuration, now: () => Timestamp) extends ActorSubscriber {
+  import sensor.TimestampOrd
 
-  implicit val timestampedOrdering = Ordering.by[(Timestamp, T), Long](_._1)
-
-  var recorded = SortedSet.empty[(Timestamp, T)]
+  var recorded = SortedSet.empty[Measurement]
 
   override protected def requestStrategy: RequestStrategy = WatermarkRequestStrategy(20)
 
   override def receive: Receive = {
-    case ActorSubscriberMessage.OnNext(elem: T) =>
-      recorded = recorded.dropWhile(recordedBefore(oldestPossible())) + (now() -> elem)
+    case ActorSubscriberMessage.OnNext(m: Measurement) =>
+      recorded = recorded + m
 
     case TimedBuffer.Get =>
-      sender() ! recorded
+      sender() ! recorded.filter(recordedAfter(oldestAllowed(System.currentTimeMillis())))
 
   }
 
-  def recordedBefore(earliestAllowed: Timestamp)(elem: (Timestamp, T)) = {
-    elem._1 < earliestAllowed
+  def recordedAfter(earliestAllowed: Timestamp)(elem: Measurement) = {
+    elem.timestamp > earliestAllowed
   }
 
-  def oldestPossible(current: Timestamp = now): Timestamp =
-    current - keepLast.toMillis
+  def oldestAllowed(mostRecent: Timestamp ) =
+    mostRecent - keepLast.toMillis
 
 }
 
 object TimedBuffer {
-  type Timestamp = Long
+
+  def props(keepLast: FiniteDuration) = Props(classOf[TimedBuffer], keepLast)
 
   object Get
 
