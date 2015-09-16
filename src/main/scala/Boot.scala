@@ -2,10 +2,11 @@ import java.io.File
 
 import akka.actor._
 import akka.stream.ActorMaterializer
-import akka.stream.actor.ActorPublisher
+import akka.stream.actor.ActorSubscriber
 import akka.stream.scaladsl._
-import sensor.{Measurement, W1ThermSource, SerialNumber}
+import sensor.{Measurement, SerialNumber, W1ThermSource}
 import streaming.FileReloader
+import streaming.TimedBuffer.LogStats
 
 import scala.concurrent.duration._
 
@@ -19,6 +20,7 @@ object Boot extends App {
   val sensors = sensor.Sensor.find(new File(args(0)))
   log.info(s"Found ${sensors.length} sensors: ${sensors.mkString(", ")}")
 
+  val lastTwoDays = system.actorOf(streaming.TimedBuffer.props(2.days))
 
   val g = FlowGraph.closed() { implicit b =>
     val sensorSources =
@@ -28,16 +30,19 @@ object Boot extends App {
 
     val merge = b.add(Merge[(SerialNumber, Double)](sensorSources.size))
 
-    val consoleSink = b.add(Sink.foreach(println))
+    val toMeasurement = b.add {
+      Flow[(SerialNumber, Double)].map(pair => Measurement(pair._1, pair._2, System.currentTimeMillis()))
+    }
 
-    val toMeasurement = b.add{ Flow[(SerialNumber, Double)]
-      .map(pair => Measurement(pair._1, pair._2, System.currentTimeMillis())) }
-
-    sensorSources.foreach { _ ~> merge }
-                                 merge ~> toMeasurement ~> consoleSink
+    sensorSources.foreach {
+      _ ~> merge }
+           merge ~> toMeasurement ~> Sink(ActorSubscriber[Measurement](lastTwoDays))
   }
 
   log.info("Starting up flow")
   g.run()
+
+  implicit val ctx = system.dispatcher
+  system.scheduler.schedule(10.seconds, 10.seconds, lastTwoDays, LogStats)
   
 }
