@@ -2,6 +2,9 @@ import java.io.File
 import java.nio.file.{Files, Path}
 
 import akka.stream.scaladsl.Source
+import com.typesafe.config.Config
+
+import scala.util.Try
 
 package object sensor {
   type Timestamp = Long
@@ -10,7 +13,7 @@ package object sensor {
 
   case class Sensor(serialNumber: SerialNumber, device: File)
 
-  case class Measurement(serialNumber: SerialNumber, value: Double, timestamp: Timestamp)
+  case class Measurement(serialNumber: SerialNumber, value: Double, timestamp: Timestamp, sensorName: Option[String] = None)
 
   implicit val TimestampOrd = Ordering.by[Measurement, Timestamp](_.timestamp)
 
@@ -30,6 +33,11 @@ package object sensor {
       } yield sensor
 
     }
+
+    def name(serial: SerialNumber)(implicit config: Config): Option[String] = {
+      Try(config.getConfig("sensor.names").getString(serial.serial)).toOption
+    }
+
   }
 
   object W1ThermSource {

@@ -1,9 +1,10 @@
 package streaming
 
-import akka.actor.{ActorLogging, ActorRef, Props}
-import akka.stream.actor.{ActorSubscriberMessage, WatermarkRequestStrategy, RequestStrategy, ActorSubscriber}
-import sensor.{SerialNumber, Measurement, Timestamp}
-import streaming.TimedBuffer.{LogStats, Get}
+import akka.actor.{ActorLogging, Props}
+import akka.stream.actor.{ActorSubscriber, ActorSubscriberMessage, RequestStrategy, WatermarkRequestStrategy}
+import com.typesafe.config.ConfigFactory
+import sensor.{Sensor, Measurement, SerialNumber, Timestamp}
+import streaming.TimedBuffer.{Get, LogStats}
 
 import scala.collection.immutable.SortedSet
 import scala.concurrent.duration.FiniteDuration
@@ -13,6 +14,8 @@ class TimedBuffer(keepLast: FiniteDuration) extends ActorSubscriber with ActorLo
   import sensor.TimestampOrd
 
   var recorded = SortedSet.empty[Measurement]
+
+  implicit val config = ConfigFactory.load()
 
   override protected def requestStrategy: RequestStrategy = WatermarkRequestStrategy(20)
 
@@ -26,9 +29,8 @@ class TimedBuffer(keepLast: FiniteDuration) extends ActorSubscriber with ActorLo
     case LogStats =>
       val stats = recorded.groupBy(_.serialNumber).foreach { e =>
         val (SerialNumber(sn), measurements) = e
-        log.info(s"sensor $sn, recorded ${measurements.size}, last: ${measurements.last.value} deg C")
+        log.info(s"sensor ${Sensor.name(e._1).getOrElse(sn)}, recorded ${measurements.size}, last: ${measurements.last.value} deg C")
       }
-
 
 
   }
@@ -37,7 +39,7 @@ class TimedBuffer(keepLast: FiniteDuration) extends ActorSubscriber with ActorLo
     elem.timestamp > earliestAllowed
   }
 
-  def oldestAllowed(mostRecent: Timestamp ) =
+  def oldestAllowed(mostRecent: Timestamp) =
     mostRecent - keepLast.toMillis
 
 }
