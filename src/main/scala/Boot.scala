@@ -1,35 +1,41 @@
 import java.io.File
 
 import akka.actor._
+import akka.http.scaladsl.Http
+import akka.pattern._
 import akka.stream.ActorMaterializer
-import akka.stream.actor.ActorSubscriber
 import akka.stream.scaladsl._
+import akka.util.Timeout
 import com.typesafe.config.ConfigFactory
-import sensor.{Sensor, Measurement, SerialNumber, W1ThermSource}
-import streaming.FileReloader
-import streaming.TimedBuffer.LogStats
+import sensor.{Measurement, Sensor, SerialNumber, W1ThermSource}
+import streaming.LastMeasurementCacheActor.GetLast
+import streaming.{LastMeasurementCacheActor, FileReloader}
+import web.FrontendRoutes
 
+import scala.concurrent.Future
 import scala.concurrent.duration._
-import scala.util.Try
 
-object Boot extends App {
+
+object Boot extends App with FrontendRoutes {
   implicit val system = ActorSystem("reactive-temperature")
   implicit val mat = ActorMaterializer()
+
   import FlowGraph.Implicits._
   import system.log
 
   implicit val config = ConfigFactory.load()
 
+  implicit val timeout = Timeout(10.seconds)
 
   val sensors = sensor.Sensor.find(new File(args(0)))
   log.info(s"Found ${sensors.length} sensors: ${sensors.mkString(", ")}")
 
-  val lastTwoDays = system.actorOf(streaming.TimedBuffer.props(2.days))
+  val lastMeasurement = system.actorOf(LastMeasurementCacheActor.props)
 
   val g = FlowGraph.closed() { implicit b =>
     val sensorSources =
-    sensors.map { sensor =>
-      W1ThermSource(FileReloader.source(5.seconds, sensor.device.getPath), sensor)
+      sensors.map { sensor =>
+        W1ThermSource(FileReloader.source(5.seconds, sensor.device.getPath), sensor)
       }
 
     val merge = b.add(Merge[(SerialNumber, Double)](sensorSources.size))
@@ -37,22 +43,29 @@ object Boot extends App {
     val toMeasurement = b.add {
       Flow[(SerialNumber, Double)].map { pair =>
         val (serial, temp) = pair
-        Measurement(serial, temp, System.currentTimeMillis(),
+        Measurement(serial, temp, java.time.LocalDateTime.now(),
           Sensor.name(serial))
       }
     }
 
     sensorSources.foreach {
-      _ ~> merge }
-           merge ~> toMeasurement ~> Sink(ActorSubscriber[Measurement](lastTwoDays))
+      _ ~> merge
+    }
+    merge ~> toMeasurement ~> Sink.foreach { m:Measurement => lastMeasurement ! m }
   }
-
 
 
   log.info("Starting up flow")
   g.run()
 
-  implicit val ctx = system.dispatcher
-  system.scheduler.schedule(10.seconds, 10.seconds, lastTwoDays, LogStats)
-  
+  implicit val executionContext = system.dispatcher
+
+  override def currentReadings: Future[Map[String, Measurement]] =
+    (lastMeasurement ? GetLast).mapTo[Map[SerialNumber, Measurement]].map(_.map { kv =>
+      val serialNumber = kv._1
+      val lastMeasurement = kv._2
+      (Sensor.name(serialNumber).getOrElse(serialNumber.serial), lastMeasurement)
+    })
+
+  Http().bindAndHandle(route, "0.0.0.0", 8080)
 }

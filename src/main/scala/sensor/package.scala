@@ -7,7 +7,7 @@ import com.typesafe.config.Config
 import scala.util.Try
 
 package object sensor {
-  type Timestamp = Long
+  type Timestamp = java.time.LocalDateTime
 
   case class SerialNumber(serial: String) extends AnyVal
 
@@ -15,7 +15,6 @@ package object sensor {
 
   case class Measurement(serialNumber: SerialNumber, value: Double, timestamp: Timestamp, sensorName: Option[String] = None)
 
-  implicit val TimestampOrd = Ordering.by[Measurement, Timestamp](_.timestamp)
 
   object Sensor {
 
