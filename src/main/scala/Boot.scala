@@ -1,6 +1,7 @@
 import java.io.File
 
 import akka.actor._
+import akka.http.ServerSettings
 import akka.http.scaladsl.Http
 import akka.pattern._
 import akka.stream.ActorMaterializer
@@ -51,7 +52,10 @@ object Boot extends App with FrontendRoutes {
     sensorSources.foreach {
       _ ~> merge
     }
-    merge ~> toMeasurement ~> Sink.foreach { m:Measurement => lastMeasurement ! m }
+    merge ~> toMeasurement ~> Sink.foreach { m:Measurement =>
+      log.info(m.toString)
+      lastMeasurement ! m
+    }
   }
 
 
