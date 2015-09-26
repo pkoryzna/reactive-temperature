@@ -4,6 +4,7 @@ import akka.http.scaladsl.marshalling.PredefinedToEntityMarshallers
 import akka.http.scaladsl.model.MediaTypes
 import akka.http.scaladsl.server.Route
 import sensor.Measurement
+import streaming.CurrentReadings
 
 import scala.concurrent.{ExecutionContext, Future}
 
@@ -14,10 +15,9 @@ package object web {
   }
 
   trait FrontendRoutes extends Routes {
-
+    self: CurrentReadings =>
     import akka.http.scaladsl.server.Directives._
 
-    implicit val executionContext: ExecutionContext
     implicit val marshaller = PredefinedToEntityMarshallers.stringMarshaller(MediaTypes.`text/html`)
 
     def currentReadings: Future[Map[String, Measurement]]
