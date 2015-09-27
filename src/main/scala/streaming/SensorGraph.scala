@@ -38,7 +38,7 @@ trait SensorGraph {
     val toMeasurement = b.add {
       Flow[(SerialNumber, Double)].map { pair =>
         val (serial, temp) = pair
-        Measurement(serial, temp, java.time.LocalDateTime.now(),
+        Measurement(serial, temp, java.time.ZonedDateTime.now(),
         Sensor.name(serial))
       }
     }

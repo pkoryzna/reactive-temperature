@@ -1,5 +1,6 @@
 import java.io.File
 import java.nio.file.{Files, Path}
+import java.time.{ZonedDateTime, LocalDateTime}
 
 import akka.stream.scaladsl.Source
 import com.typesafe.config.Config
@@ -7,13 +8,12 @@ import com.typesafe.config.Config
 import scala.util.Try
 
 package object sensor {
-  type Timestamp = java.time.LocalDateTime
 
   case class SerialNumber(serial: String) extends AnyVal
 
   case class Sensor(serialNumber: SerialNumber, device: File)
 
-  case class Measurement(serialNumber: SerialNumber, value: Double, timestamp: Timestamp, sensorName: Option[String] = None)
+  case class Measurement(serialNumber: SerialNumber, value: Double, timestamp: ZonedDateTime, sensorName: Option[String] = None)
 
 
   object Sensor {

@@ -10,11 +10,9 @@ import scala.concurrent.{ExecutionContext, Future}
 
 package object web {
 
-  trait Routes {
-    def route: Route
-  }
 
-  trait FrontendRoutes extends Routes {
+
+  trait FrontendRoutes {
     self: CurrentReadings =>
     import akka.http.scaladsl.server.Directives._
 
@@ -22,7 +20,7 @@ package object web {
 
     def currentReadings: Future[Map[String, Measurement]]
 
-    def route = pathEndOrSingleSlash {
+    val frontendRoute: Route = pathEndOrSingleSlash {
       get {
         complete {
           currentReadings map { FrontendView.overview(_).render }
