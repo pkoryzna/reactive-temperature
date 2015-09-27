@@ -24,6 +24,13 @@ with ApiRoutes
   val host = "0.0.0.0"
   val port = 8080
 
+  if (sensors.isEmpty) {
+    log.error("No sensors found, check if sensor path " +
+      s"${sensorDevicePath} is valid and/or the hardware is plugged in correctly")
+    system.shutdown()
+    sys.exit(1)
+  }
+
   log.info(s"Found ${sensors.length} sensors: ${sensors.mkString(", ")}")
   log.info("Starting up flow")
   graph.run()
