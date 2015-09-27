@@ -8,7 +8,7 @@ import spray.json.{DefaultJsonProtocol, JsString, JsValue, RootJsonFormat}
 
 package object json {
 
-  object MeasurementProtocol extends DefaultJsonProtocol {
+  object MeasurementJsonProtocol extends DefaultJsonProtocol {
 
     implicit val serialNumberFormat = jsonFormat1(SerialNumber.apply)
 
