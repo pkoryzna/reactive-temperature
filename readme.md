@@ -8,6 +8,7 @@ using Akka Streams for reading and processing data and Akka HTTP to expose an AP
 
 * Finding sensors in directory supplied as first argument, e.g. `/sys/bus/w1/devices`
 * Periodically reloading device files for each found sensor
-* Logging measurement history to a buffer and printing to console, _persistence not implemented yet_
+* Logging measurements to console
+* HTML and JSON view for last measurements
 
 
