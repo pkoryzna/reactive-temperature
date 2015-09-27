@@ -27,6 +27,10 @@ trait SensorGraph {
 
   val lastMeasurement = system.actorOf(LastMeasurementCacheActor.props)
 
+  /**
+   * Graph with Source for each 1-wire device, merged into one flow, connected to side-effecting
+   * Sink sending each measurement to a LastMeasurementCacheActor and logging them.
+   */
   lazy val graph = FlowGraph.closed() { implicit b =>
     val sensorSources =
     sensors.map { sensor =>

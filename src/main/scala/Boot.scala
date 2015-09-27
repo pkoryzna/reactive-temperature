@@ -30,7 +30,7 @@ with ApiRoutes
 
   override implicit val executionContext = system.dispatcher
 
-  override val measurement: ActorRef = lastMeasurement
+  override val lastMeasurementRef: ActorRef = lastMeasurement
 
   log.info(s"HTTP server bound to $host:$port")
 
