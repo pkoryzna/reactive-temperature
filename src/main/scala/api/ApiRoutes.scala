@@ -13,7 +13,7 @@ trait ApiRoutes { self: CurrentReadings =>
   val apiRoute: Route = pathPrefix("api") {
     get {
       (path ("current") | pathEndOrSingleSlash ) {
-        complete( currentReadings map {_.toJson } )
+        complete( currentReadings map {_.values.toJson } )
       }
     }
   }
