@@ -7,6 +7,7 @@ import akka.stream.scaladsl._
 import akka.stream.{ActorMaterializer, ClosedShape, OverflowStrategy}
 import akka.util.Timeout
 import com.typesafe.config.Config
+import sensor.Measurement
 
 import scala.concurrent.duration._
 
@@ -33,8 +34,9 @@ trait SensorGraph {
   lazy val graph = {
     val sensorActors = sensors.map(s => system.actorOf(SensorReaderActor.props(sensorReadPeriod, s)))
 
-    Source.actorRef(200, OverflowStrategy.dropTail)
+    Source.actorRef[Measurement](200, OverflowStrategy.dropTail)
       .mapMaterializedValue(ref => sensorActors.foreach(_ ! ref))
+      .alsoTo(Sink.foreach(m => log.info(m.toString)))
       .to(Sink.actorRef(lastMeasurement, PoisonPill))
   }
 }
