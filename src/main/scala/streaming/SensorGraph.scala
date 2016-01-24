@@ -2,13 +2,13 @@ package streaming
 
 import java.io.File
 
-import akka.actor.ActorSystem
-import akka.stream.{ClosedShape, ActorMaterializer}
+import akka.actor.{ActorSystem, PoisonPill}
 import akka.stream.scaladsl._
+import akka.stream.{ActorMaterializer, ClosedShape, OverflowStrategy}
 import akka.util.Timeout
+import com.typesafe.config.Config
+
 import scala.concurrent.duration._
-import com.typesafe.config.{Config, ConfigFactory}
-import sensor.{Sensor, Measurement, SerialNumber, W1ThermSource}
 
 trait SensorGraph {
   implicit def system: ActorSystem
@@ -20,41 +20,21 @@ trait SensorGraph {
 
   implicit def timeout: Timeout
   def sensorDevicePath: String
-  def sensorReadPeriod: FiniteDuration = 5.seconds
+  def sensorReadPeriod: FiniteDuration = 2.seconds
 
   lazy val sensors = sensor.Sensor.find(new File(sensorDevicePath))
 
   val lastMeasurement = system.actorOf(LastMeasurementCacheActor.props)
 
   /**
-   * Graph with Source for each 1-wire device, merged into one flow, connected to side-effecting
-   * Sink sending each measurement to a LastMeasurementCacheActor and logging them.
+   * Graph spawning an actor for each 1-wire device, each sending to actorRef source,
+   * connected to side-effecting Sink sending each measurement to a LastMeasurementCacheActor.
    */
-  lazy val graph = RunnableGraph.fromGraph(GraphDSL.create() { implicit b: GraphDSL.Builder[Unit] =>
-    import GraphDSL.Implicits._
-    val sensorSources =
-    sensors.map { sensor =>
-        W1ThermSource(FileReloader.source(sensorReadPeriod, sensor.device.getPath), sensor)
-      }
+  lazy val graph = {
+    val sensorActors = sensors.map(s => system.actorOf(SensorReaderActor.props(sensorReadPeriod, s)))
 
-    val merge = b.add(Merge[(SerialNumber, Double)](sensorSources.size))
-
-    val toMeasurement = b.add {
-      Flow[(SerialNumber, Double)].map { pair =>
-        val (serial, temp) = pair
-        Measurement(serial, temp, java.time.ZonedDateTime.now(),
-        Sensor.name(serial))
-      }
-    }
-
-    sensorSources.foreach {
-      _ ~> merge
-    }
-    merge ~> toMeasurement ~> Sink.foreach { m:Measurement =>
-      log.info(m.toString)
-      lastMeasurement ! m
-    }
-
-    ClosedShape
-  })
+    Source.actorRef(200, OverflowStrategy.dropTail)
+      .mapMaterializedValue(ref => sensorActors.foreach(_ ! ref))
+      .to(Sink.actorRef(lastMeasurement, PoisonPill))
+  }
 }
