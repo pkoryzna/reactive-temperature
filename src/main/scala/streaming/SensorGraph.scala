@@ -3,8 +3,8 @@ package streaming
 import java.io.File
 
 import akka.actor.ActorSystem
-import akka.stream.ActorMaterializer
-import akka.stream.scaladsl.{Sink, Flow, Merge, FlowGraph}
+import akka.stream.{ClosedShape, ActorMaterializer}
+import akka.stream.scaladsl._
 import akka.util.Timeout
 import scala.concurrent.duration._
 import com.typesafe.config.{Config, ConfigFactory}
@@ -14,7 +14,6 @@ trait SensorGraph {
   implicit def system: ActorSystem
   implicit val mat = ActorMaterializer()
 
-  import FlowGraph.Implicits._
   val log = system.log
 
   implicit val config: Config
@@ -31,7 +30,8 @@ trait SensorGraph {
    * Graph with Source for each 1-wire device, merged into one flow, connected to side-effecting
    * Sink sending each measurement to a LastMeasurementCacheActor and logging them.
    */
-  lazy val graph = FlowGraph.closed() { implicit b =>
+  lazy val graph = RunnableGraph.fromGraph(GraphDSL.create() { implicit b: GraphDSL.Builder[Unit] =>
+    import GraphDSL.Implicits._
     val sensorSources =
     sensors.map { sensor =>
         W1ThermSource(FileReloader.source(sensorReadPeriod, sensor.device.getPath), sensor)
@@ -54,5 +54,7 @@ trait SensorGraph {
       log.info(m.toString)
       lastMeasurement ! m
     }
-  }
+
+    ClosedShape
+  })
 }

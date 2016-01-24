@@ -96,6 +96,6 @@ object FileReloader {
   case object ReloadFile
 
   def source(period: FiniteDuration, path: String)(implicit system: ActorSystem) = {
-    Source(ActorPublisher[String](system.actorOf(FileReloader.props(period, path))))
+    Source.actorPublisher[String](FileReloader.props(period, path))
   }
 }
