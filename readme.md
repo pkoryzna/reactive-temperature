@@ -1,3 +1,5 @@
+# This code is very old and depends on older APIs from experimental versions of Akka Streams etc.
+
 # Reactive Temperature
 
 _or: probably the world's most overengineered attempt at..._
